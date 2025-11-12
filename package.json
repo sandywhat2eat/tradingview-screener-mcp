@@ -1,0 +1,22 @@
+{
+  "name": "tradingview-screener-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server for TradingView Screener Data - Fetches real-time screener results from TradingView with Supabase configuration",
+  "main": "src/tradingview_screener_mcp.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/tradingview_screener_mcp.js",
+    "dev": "node --watch src/tradingview_screener_mcp.js",
+    "start-service": "./start_screener_service.sh",
+    "stop-service": "./stop_screener_service.sh"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "keywords": ["mcp", "tradingview", "screener", "trading", "market-data", "nse", "stocks"],
+  "author": "TradingView Screener MCP Server",
+  "license": "MIT"
+}

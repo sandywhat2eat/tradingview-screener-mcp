@@ -1,0 +1,9 @@
+python-dotenv
+requests
+supabase
+selenium
+beautifulsoup4
+lxml
+websocket-client
+webdriver-manager
+aiohttp

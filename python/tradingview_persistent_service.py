@@ -289,11 +289,16 @@ class TradingViewPersistentSession:
                     success = await self._apply_index_filter_fast(index_code)
                     if not success:
                         logger.warning(f"Could not apply index filter: {index_filter}")
-            
-            # Scrape data from table instead of export
-            data = await self._scrape_table_data()
+
+            # Download CSV data (includes candlestick patterns and all columns)
+            data = await self._download_csv_data()
+
+            # Fallback to HTML scraping if CSV download fails
             if not data:
-                return {"error": "Failed to scrape data"}
+                logger.warning("CSV download failed, falling back to HTML scraping")
+                data = await self._scrape_table_data()
+                if not data:
+                    return {"error": "Failed to scrape data"}
             
             elapsed = time.time() - start_time
             self.request_count += 1
@@ -595,7 +600,136 @@ class TradingViewPersistentSession:
         except Exception as e:
             logger.error(f"Error applying index filter: {e}")
             return False
-    
+
+    async def _download_csv_data(self) -> Optional[list]:
+        """Download CSV export and parse data - gets ALL columns including candlestick patterns"""
+        try:
+            # Clean up old CSV files first
+            self._clean_old_csv_files()
+
+            # Step 1: Click menu trigger to open export menu
+            menu_trigger_xpath = "//*[@id='js-screener-container']/div[2]/div/div[1]/div[1]/div[1]/div/h2"
+            try:
+                menu_trigger = await asyncio.to_thread(
+                    lambda: WebDriverWait(self.driver, 10).until(
+                        EC.element_to_be_clickable((By.XPATH, menu_trigger_xpath))
+                    )
+                )
+                self.driver.execute_script("arguments[0].scrollIntoView(true);", menu_trigger)
+                await asyncio.sleep(0.5)
+                menu_trigger.click()
+                logger.info("Menu trigger clicked successfully")
+                await asyncio.sleep(2)
+            except Exception as e:
+                logger.error(f"Failed to click menu trigger: {e}")
+                return None
+
+            # Step 2: Click "Export screen results" button - simple text match
+            try:
+                export_button = await asyncio.to_thread(
+                    lambda: WebDriverWait(self.driver, 10).until(
+                        EC.element_to_be_clickable((By.XPATH, "//div[contains(text(), 'Export screen results')]"))
+                    )
+                )
+                export_button.click()
+                logger.info("Export button clicked successfully")
+            except Exception as e:
+                logger.error(f"Failed to click export button: {e}")
+                return None
+
+            # Step 3: Wait for CSV download to complete
+            await asyncio.sleep(2)  # Give download time to start
+
+            downloaded_file = await self._wait_for_csv_download(timeout_seconds=15)
+            if not downloaded_file:
+                logger.error("CSV download failed or timed out")
+                return None
+
+            # Step 4: Parse CSV file
+            import pandas as pd
+            df = pd.read_csv(downloaded_file)
+
+            # Convert to list of dictionaries
+            data = df.to_dict('records')
+            logger.info(f"Parsed {len(data)} rows from CSV with {len(df.columns)} columns")
+            logger.info(f"Columns: {list(df.columns)[:10]}")
+
+            return data
+
+        except Exception as e:
+            logger.error(f"CSV download failed: {e}")
+            return None
+
+    def _clean_old_csv_files(self):
+        """Delete all existing CSV files in download directory"""
+        try:
+            if not os.path.exists(self.download_dir):
+                return
+
+            deleted_count = 0
+            for filename in os.listdir(self.download_dir):
+                if filename.lower().endswith('.csv'):
+                    file_path = os.path.join(self.download_dir, filename)
+                    try:
+                        os.remove(file_path)
+                        deleted_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to delete {filename}: {e}")
+
+            if deleted_count > 0:
+                logger.info(f"Cleaned up {deleted_count} old CSV files")
+        except Exception as e:
+            logger.warning(f"Error cleaning old CSV files: {e}")
+
+    async def _wait_for_csv_download(self, timeout_seconds: int = 15) -> Optional[str]:
+        """Wait for CSV download to complete and return file path"""
+        start_time = time.time()
+        initial_files = set(os.listdir(self.download_dir))
+        logger.info(f"Waiting for download in: {self.download_dir}")
+
+        while time.time() - start_time < timeout_seconds:
+            current_files = set(os.listdir(self.download_dir))
+            new_files = current_files - initial_files
+
+            # Filter for CSV files
+            csv_files = [f for f in new_files if f.lower().endswith(".csv") and not f.startswith('.')]
+
+            if csv_files:
+                latest_csv = max(csv_files, key=lambda f: os.path.getmtime(os.path.join(self.download_dir, f)))
+                latest_csv_path = os.path.join(self.download_dir, latest_csv)
+
+                # Check if download is complete (no .crdownload file)
+                base_name = os.path.splitext(latest_csv)[0]
+                is_downloading = any(
+                    f.startswith(base_name) and f.lower().endswith(".crdownload")
+                    for f in os.listdir(self.download_dir)
+                )
+
+                if not is_downloading:
+                    # Wait briefly for file to stabilize (2 checks)
+                    await asyncio.sleep(1)
+                    if os.path.exists(latest_csv_path):
+                        size1 = os.path.getsize(latest_csv_path)
+                        await asyncio.sleep(1)
+                        if os.path.exists(latest_csv_path):
+                            size2 = os.path.getsize(latest_csv_path)
+                            if size1 == size2 and size1 > 0:
+                                logger.info(f"Download complete: {latest_csv} ({size1} bytes)")
+                                return latest_csv_path
+                            elif size2 > 0:
+                                # Size changed but file exists, give it one more second
+                                await asyncio.sleep(1)
+                                if os.path.exists(latest_csv_path):
+                                    final_size = os.path.getsize(latest_csv_path)
+                                    if final_size > 0:
+                                        logger.info(f"Download complete (after wait): {latest_csv} ({final_size} bytes)")
+                                        return latest_csv_path
+
+            await asyncio.sleep(2)
+
+        logger.error("Download timeout")
+        return None
+
     async def _scrape_table_data(self) -> Optional[list]:
         """Scrape data directly from table - much faster and more reliable"""
         try:

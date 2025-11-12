@@ -193,7 +193,7 @@ class TradingViewScreenerMCPServer {
 
   async handleListScreenerTypes(args) {
     const result = await this.executeScript('python/tradingview_screener_handler.py', [
-      'list_types'
+      'handle_list_screener_types'
     ]);
 
     return {
@@ -208,7 +208,7 @@ class TradingViewScreenerMCPServer {
 
   async handleListScreenerIndices(args) {
     const result = await this.executeScript('python/tradingview_screener_handler.py', [
-      'list_indices'
+      'handle_list_screener_indices'
     ]);
 
     return {
@@ -222,7 +222,7 @@ class TradingViewScreenerMCPServer {
   }
 
   async handleFetchScreenerData(args) {
-    const scriptArgs = ['fetch', '--screener_type', args.screener_type];
+    const scriptArgs = ['handle_fetch_screener_data', '--screener_type', args.screener_type];
 
     if (args.index_filter) {
       scriptArgs.push('--index_filter', args.index_filter);
@@ -242,7 +242,7 @@ class TradingViewScreenerMCPServer {
 
   async handleGetSessionHealth(args) {
     const result = await this.executeScript('python/tradingview_screener_handler.py', [
-      'health'
+      'handle_get_screener_session_health'
     ]);
 
     return {
@@ -257,7 +257,7 @@ class TradingViewScreenerMCPServer {
 
   async handleRefreshSession(args) {
     const result = await this.executeScript('python/tradingview_screener_handler.py', [
-      'restart'
+      'handle_refresh_screener_session'
     ]);
 
     return {
@@ -272,7 +272,7 @@ class TradingViewScreenerMCPServer {
 
   async handleRefreshConfig(args) {
     const result = await this.executeScript('python/tradingview_screener_handler.py', [
-      'refresh_config'
+      'handle_refresh_screener_config'
     ]);
 
     return {
@@ -287,7 +287,7 @@ class TradingViewScreenerMCPServer {
 
   async handleGetConfig(args) {
     const result = await this.executeScript('python/tradingview_screener_handler.py', [
-      'get_config'
+      'handle_get_screener_config'
     ]);
 
     return {

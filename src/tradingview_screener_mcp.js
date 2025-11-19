@@ -30,7 +30,7 @@ class TradingViewScreenerMCPServer {
     this.setupToolHandlers();
 
     // Path configuration
-    this.pythonPath = '/Users/jaykrish/agents/project_output/venv/bin/python';
+    this.pythonPath = '/root/venv/bin/python3';
     this.projectRoot = path.join(__dirname, '..');
   }
 

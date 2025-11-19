@@ -45,14 +45,22 @@ class TradingViewScreenerClient:
         
         # Service not running, start it
         logger.info("Starting persistent screener service...")
-        
-        # Start service in background
+
+        # Start service in background with environment variables
         service_script = os.path.join(os.path.dirname(__file__), "tradingview_persistent_service.py")
+        env = os.environ.copy()
+        # Load .env file for service
+        from dotenv import load_dotenv
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        load_dotenv(os.path.join(project_root, '.env'))
+        env.update(os.environ)
+
         subprocess.Popen(
             [sys.executable, service_script],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            start_new_session=True
+            start_new_session=True,
+            env=env
         )
         
         # Wait for service to be ready
